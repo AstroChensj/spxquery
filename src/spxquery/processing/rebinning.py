@@ -19,6 +19,27 @@ from ..utils.helpers import check_flag_bits, create_flag_mask
 logger = logging.getLogger(__name__)
 
 
+def _format_float_for_filename(value: float) -> str:
+    """Format numeric config values compactly for filenames."""
+    return f"{value:g}"
+
+
+def get_binned_output_suffix(photometry_config: PhotometryConfig) -> str:
+    """Build a stable filename suffix for rebinned products."""
+    if photometry_config.time_bin_days is None:
+        raise ValueError("time_bin_days must be set to construct rebinned output filenames")
+
+    time_str = _format_float_for_filename(photometry_config.time_bin_days)
+    wavelength_str = _format_float_for_filename(photometry_config.wavelength_bin_scale)
+    return f"binned_t{time_str}d_w{wavelength_str}"
+
+
+def get_binned_output_paths(results_dir: Path, photometry_config: PhotometryConfig) -> Tuple[Path, Path]:
+    """Return CSV and PNG paths for rebinned products for the given configuration."""
+    suffix = get_binned_output_suffix(photometry_config)
+    return results_dir / f"lightcurve_{suffix}.csv", results_dir / f"combined_plot_{suffix}.png"
+
+
 def _valid_weight(result: PhotometryResult) -> bool:
     """Check whether a photometry point can contribute to weighted combination."""
     return np.isfinite(result.flux_error) and result.flux_error > 0 and np.isfinite(result.flux)

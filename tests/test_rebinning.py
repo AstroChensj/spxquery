@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pandas as pd
 
 from spxquery.core.config import PhotometryConfig, PhotometryResult, Source
 from spxquery.processing.rebinning import (
     generate_binned_lightcurve_dataframe,
+    get_binned_output_paths,
+    get_binned_output_suffix,
     load_or_generate_binned_photometry,
 )
 
@@ -78,7 +82,7 @@ def test_load_or_generate_binned_photometry_reuses_saved_csv(tmp_path):
         _result("a", 100.1, 10.0, 1.0, 1.00, 0.10, "D1"),
         _result("b", 100.2, 20.0, 2.0, 1.04, 0.10, "D1"),
     ]
-    output_csv = tmp_path / "lightcurve_binned.csv"
+    output_csv = tmp_path / "lightcurve_binned_t1d_w1.csv"
 
     df1, photometry1 = load_or_generate_binned_photometry(
         source=source,
@@ -101,3 +105,24 @@ def test_load_or_generate_binned_photometry_reuses_saved_csv(tmp_path):
     assert len(photometry2) == 1
     saved = pd.read_csv(output_csv, comment="#")
     assert saved.iloc[0]["n_used_in_bin"] == 2
+
+
+def test_get_binned_output_suffix_and_paths():
+    config = PhotometryConfig(enable_binned_photometry=True, time_bin_days=50.0, wavelength_bin_scale=1.5)
+
+    assert get_binned_output_suffix(config) == "binned_t50d_w1.5"
+
+    csv_path, png_path = get_binned_output_paths(Path("/tmp"), config)
+    assert str(csv_path).endswith("lightcurve_binned_t50d_w1.5.csv")
+    assert str(png_path).endswith("combined_plot_binned_t50d_w1.5.png")
+
+
+def test_different_binning_configs_use_different_output_filenames(tmp_path):
+    config_a = PhotometryConfig(enable_binned_photometry=True, time_bin_days=7.0, wavelength_bin_scale=1.0)
+    config_b = PhotometryConfig(enable_binned_photometry=True, time_bin_days=100.0, wavelength_bin_scale=1.0)
+
+    csv_a, png_a = get_binned_output_paths(tmp_path, config_a)
+    csv_b, png_b = get_binned_output_paths(tmp_path, config_b)
+
+    assert csv_a != csv_b
+    assert png_a != png_b
