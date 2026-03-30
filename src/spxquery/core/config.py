@@ -118,6 +118,16 @@ class PhotometryConfig:
         Size of background window in pixels (for window method).
         Default: 50. If int: square window. If tuple: (height, width).
         Pixels intersecting the aperture are automatically excluded.
+    enable_binned_photometry : bool
+        Whether to generate rebinned photometry products from single-epoch results.
+        Default: False.
+    time_bin_days : Optional[float]
+        Fixed time bin width in days for rebinned photometry.
+        Required when enable_binned_photometry=True.
+    wavelength_bin_scale : float
+        Scale factor applied to the per-band median native bandwidth when defining
+        wavelength bins for rebinned photometry.
+        Default: 1.0.
     """
 
     aperture_method: str = "fwhm"
@@ -139,6 +149,9 @@ class PhotometryConfig:
     annulus_expansion_step: float = 0.5
     background_method: str = "annulus"
     window_size: Union[int, Tuple[int, int]] = 50
+    enable_binned_photometry: bool = False
+    time_bin_days: Optional[float] = None
+    wavelength_bin_scale: float = 1.0
 
     def __post_init__(self):
         """Validate parameters."""
@@ -188,6 +201,18 @@ class PhotometryConfig:
                 raise ValueError(f"window_size elements must be > 0, got {self.window_size}")
         else:
             raise TypeError(f"window_size must be int or tuple, got {type(self.window_size)}")
+
+        if self.enable_binned_photometry:
+            if self.time_bin_days is None:
+                raise ValueError("time_bin_days is required when enable_binned_photometry=True")
+            if self.time_bin_days <= 0:
+                raise ValueError(f"time_bin_days must be > 0, got {self.time_bin_days}")
+
+        if self.time_bin_days is not None and self.time_bin_days <= 0:
+            raise ValueError(f"time_bin_days must be > 0, got {self.time_bin_days}")
+
+        if self.wavelength_bin_scale <= 0:
+            raise ValueError(f"wavelength_bin_scale must be > 0, got {self.wavelength_bin_scale}")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""

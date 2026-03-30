@@ -35,6 +35,9 @@ class TestPhotometryConfig:
         assert config.bg_sigma_clip_sigma == 3.0
         assert config.pixel_scale_fallback == 6.2
         assert config.subtract_zodi is True
+        assert config.enable_binned_photometry is False
+        assert config.time_bin_days is None
+        assert config.wavelength_bin_scale == 1.0
 
     def test_custom_values(self):
         """Test creating config with custom values."""
@@ -54,6 +57,17 @@ class TestPhotometryConfig:
         assert config.annulus_inner_offset == 2.0
         assert config.bg_sigma_clip_sigma == 5.0
         assert config.pixel_scale_fallback == 7.0
+
+    def test_binned_photometry_validation(self):
+        """Test validation for rebinned photometry parameters."""
+        with pytest.raises(ValueError, match="time_bin_days is required"):
+            PhotometryConfig(enable_binned_photometry=True)
+
+        with pytest.raises(ValueError, match="time_bin_days must be > 0"):
+            PhotometryConfig(enable_binned_photometry=True, time_bin_days=0.0)
+
+        with pytest.raises(ValueError, match="wavelength_bin_scale must be > 0"):
+            PhotometryConfig(wavelength_bin_scale=0.0)
 
     def test_validation_positive_values(self):
         """Test that validation rejects negative values."""
@@ -84,7 +98,10 @@ class TestPhotometryConfig:
             aperture_method="fwhm",
             background_method="window",
             annulus_inner_offset=2.5,
-            bg_sigma_clip_sigma=4.0
+            bg_sigma_clip_sigma=4.0,
+            enable_binned_photometry=True,
+            time_bin_days=1.0,
+            wavelength_bin_scale=1.5,
         )
         data = config.to_dict()
 
@@ -93,6 +110,9 @@ class TestPhotometryConfig:
         assert data["background_method"] == "window"
         assert data["annulus_inner_offset"] == 2.5
         assert data["bg_sigma_clip_sigma"] == 4.0
+        assert data["enable_binned_photometry"] is True
+        assert data["time_bin_days"] == 1.0
+        assert data["wavelength_bin_scale"] == 1.5
 
         # Round-trip test
         config2 = PhotometryConfig.from_dict(data)
@@ -100,6 +120,9 @@ class TestPhotometryConfig:
         assert config2.background_method == "window"
         assert config2.annulus_inner_offset == 2.5
         assert config2.bg_sigma_clip_sigma == 4.0
+        assert config2.enable_binned_photometry is True
+        assert config2.time_bin_days == 1.0
+        assert config2.wavelength_bin_scale == 1.5
 
 
 class TestVisualizationConfig:

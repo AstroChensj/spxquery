@@ -16,6 +16,7 @@ from ..processing.lightcurve import (
     save_lightcurve_csv,
 )
 from ..processing.photometry import process_all_observations
+from ..processing.rebinning import load_or_generate_binned_photometry
 from ..utils.helpers import format_cutout_url_params, get_file_list, load_yaml, save_yaml, setup_logging
 from ..visualization.plots import create_combined_plot
 
@@ -385,6 +386,15 @@ class SPXQueryPipeline:
         csv_path = self.results_dir / "lightcurve.csv"
         save_lightcurve_csv(df, csv_path)
 
+        if self.config.photometry.enable_binned_photometry:
+            binned_csv_path = self.results_dir / "lightcurve_binned.csv"
+            load_or_generate_binned_photometry(
+                source=self.config.query.source,
+                photometry_config=self.config.photometry,
+                raw_photometry_results=photometry_results,
+                output_csv_path=binned_csv_path,
+            )
+
         # Print summary
         print_lightcurve_summary(df)
 
@@ -449,6 +459,30 @@ class SPXQueryPipeline:
             visualization_config=self.config.visualization,  # Pass visualization config
         )
 
+        if self.config.photometry.enable_binned_photometry:
+            binned_csv_path = self.results_dir / "lightcurve_binned.csv"
+            binned_df, binned_results = load_or_generate_binned_photometry(
+                source=self.config.query.source,
+                photometry_config=self.config.photometry,
+                raw_photometry_results=self.state.photometry_results,
+                raw_csv_path=self.results_dir / "lightcurve.csv",
+                output_csv_path=binned_csv_path,
+            )
+
+            if not binned_df.empty and binned_results:
+                binned_plot_path = self.results_dir / "combined_plot_binned.png"
+                create_combined_plot(
+                    binned_results,
+                    binned_plot_path,
+                    apply_quality_filters=True,
+                    sigma_threshold=self.config.visualization.sigma_threshold,
+                    bad_flags=self.config.photometry.bad_flags,
+                    use_magnitude=self.config.visualization.use_magnitude,
+                    show_errorbars=self.config.visualization.show_errorbars,
+                    visualization_config=self.config.visualization,
+                )
+                logger.info(f"Binned visualization saved to {binned_plot_path}")
+
         # Update state
         self.state.plot_path = plot_path
         self.state.stage = "complete"
@@ -456,6 +490,42 @@ class SPXQueryPipeline:
         self.save_state()
 
         logger.info(f"Visualization saved to {plot_path}")
+
+    def run_binned_photometry(self) -> None:
+        """
+        Generate rebinned photometry products from saved single-epoch photometry.
+        """
+        if not self.config.photometry.enable_binned_photometry:
+            raise RuntimeError("Binned photometry is disabled. Set enable_binned_photometry=True in PhotometryConfig.")
+
+        raw_csv_path = self.results_dir / "lightcurve.csv"
+        binned_csv_path = self.results_dir / "lightcurve_binned.csv"
+        binned_plot_path = self.results_dir / "combined_plot_binned.png"
+
+        logger.info("Generating rebinned photometry products from saved single-epoch photometry")
+        binned_df, binned_results = load_or_generate_binned_photometry(
+            source=self.config.query.source,
+            photometry_config=self.config.photometry,
+            raw_photometry_results=self.state.photometry_results or None,
+            raw_csv_path=raw_csv_path,
+            output_csv_path=binned_csv_path,
+        )
+
+        if binned_df.empty or not binned_results:
+            logger.warning("No rebinned photometry products were generated")
+            return
+
+        create_combined_plot(
+            binned_results,
+            binned_plot_path,
+            apply_quality_filters=True,
+            sigma_threshold=self.config.visualization.sigma_threshold,
+            bad_flags=self.config.photometry.bad_flags,
+            use_magnitude=self.config.visualization.use_magnitude,
+            show_errorbars=self.config.visualization.show_errorbars,
+            visualization_config=self.config.visualization,
+        )
+        logger.info(f"Saved rebinned photometry products to {binned_csv_path} and {binned_plot_path}")
 
     def resume(self, skip_existing_downloads: bool = True) -> None:
         """
